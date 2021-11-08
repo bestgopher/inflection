@@ -1,0 +1,12 @@
+[package]
+name = "inflection"
+version = "0.1.0"
+edition = "2021"
+description = "Pluralizes and singularizes English nouns"
+license = "MIT"
+repository = "https://github.com/bestgopher/inflection"
+documentation = "https://docs.rs/inflection"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]

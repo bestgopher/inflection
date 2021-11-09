@@ -37,18 +37,22 @@ lazy_static! {
             ("(drive)$", "${1}s")
         ]
         .into_iter()
-        .rev()
-        .map(|(x, y)|Regular{find: x.to_string(), replace: y.to_string()})
+        .map(|(x, y)| Regular {
+            find: x.to_string(),
+            replace: y.to_string()
+        })
         .collect()
     );
-
     static ref SINGULAR_INFLECTIONS: RwLock<Vec<Regular>> = RwLock::new(
         vec![
             ("s$", ""),
             ("(ss)$", "${1}"),
             ("(n)ews$", "${1}ews"),
             ("([ti])a$", "${1}um"),
-            ("((a)naly|(b)a|(d)iagno|(p)arenthe|(p)rogno|(s)ynop|(t)he)(sis|ses)$", "${1}sis"),
+            (
+                "((a)naly|(b)a|(d)iagno|(p)arenthe|(p)rogno|(s)ynop|(t)he)(sis|ses)$",
+                "${1}sis"
+            ),
             ("(^analy)(sis|ses)$", "${1}sis"),
             ("([^f])ves$", "${1}fe"),
             ("(hive)s$", "${1}"),
@@ -75,11 +79,12 @@ lazy_static! {
             ("(drive)s$", "${1}")
         ]
         .into_iter()
-        .rev()
-        .map(|(x, y)|Regular{find: x.to_string(), replace: y.to_string()})
+        .map(|(x, y)| Regular {
+            find: x.to_string(),
+            replace: y.to_string()
+        })
         .collect()
     );
-
     static ref IRREGULAR_INFLECTIONS: RwLock<Vec<Irregular>> = RwLock::new(
         vec![
             ("person", "people"),
@@ -94,58 +99,99 @@ lazy_static! {
             ("tooth", "teeth"),
         ]
         .into_iter()
-        .map(|(x, y)|Irregular{singular: x.to_string(), plural: y.to_string()})
+        .map(|(x, y)| Irregular {
+            singular: x.to_string(),
+            plural: y.to_string()
+        })
         .collect()
     );
-
-    static ref  UNCOUNTABLE_INFLECTIONS: RwLock<Vec<String>> = RwLock::new(
+    static ref UNCOUNTABLE_INFLECTIONS: RwLock<Vec<String>> = RwLock::new(
         vec![
-            "equipment", "information", "rice", "money", "species", "series", "fish",
-            "sheep", "jeans", "police", "milk", "salt", "time", "water", "paper", "food",
-            "art", "cash", "music", "help", "luck", "oil", "progress", "rain",
-            "research", "shopping", "software", "traffic"
+            "equipment",
+            "information",
+            "rice",
+            "money",
+            "species",
+            "series",
+            "fish",
+            "sheep",
+            "jeans",
+            "police",
+            "milk",
+            "salt",
+            "time",
+            "water",
+            "paper",
+            "food",
+            "art",
+            "cash",
+            "music",
+            "help",
+            "luck",
+            "oil",
+            "progress",
+            "rain",
+            "research",
+            "shopping",
+            "software",
+            "traffic"
         ]
         .into_iter()
-        .map(|x|x.to_string())
+        .map(|x| x.to_string())
         .collect()
     );
+    static ref COMPILED_PLURAL_MAPS: RwLock<Vec<Inflection>> =
+        {
+            let mut v = vec![];
 
-    static ref COMPILED_PLURAL_MAPS: RwLock<Vec<Inflection>> = {
-        let mut v = vec![];
+            UNCOUNTABLE_INFLECTIONS
+                .read()
+                .unwrap()
+                .iter()
+                .for_each(|x| {
+                    compile_uncountable(&mut v, x);
+                });
 
-        UNCOUNTABLE_INFLECTIONS.read().unwrap().iter().for_each(|x| {
-            compile_uncountable(&mut v, x);
-        });
+            IRREGULAR_INFLECTIONS.read().unwrap().iter().for_each(
+                |Irregular { singular, plural }| {
+                    compile_irregular_inflections(&mut v, singular, plural);
+                },
+            );
 
-        IRREGULAR_INFLECTIONS.read().unwrap().iter().for_each(|Irregular{singular, plural}| {
-            compile_irregular_inflections(&mut v, singular, plural);
-        });
+            PLURAL_INFLECTIONS.read().unwrap().iter().rev().for_each(
+                |Regular { find, replace }| {
+                    compile_inflections(&mut v, find, replace);
+                },
+            );
 
-        PLURAL_INFLECTIONS.read().unwrap().iter().for_each(|Regular{find, replace}| {
-            compile_inflections(&mut v, find, replace);
-        });
+            RwLock::new(v)
+        };
+    static ref COMPILED_SINGULAR_MAPS: RwLock<Vec<Inflection>> =
+        {
+            let mut v = vec![];
 
-        RwLock::new(v)
-    };
+            UNCOUNTABLE_INFLECTIONS
+                .read()
+                .unwrap()
+                .iter()
+                .for_each(|x| {
+                    compile_uncountable(&mut v, x);
+                });
 
+            IRREGULAR_INFLECTIONS.read().unwrap().iter().for_each(
+                |Irregular { singular, plural }| {
+                    compile_irregular_inflections(&mut v, plural, singular);
+                },
+            );
 
-     static ref COMPILED_SINGULAR_MAPS: RwLock<Vec<Inflection>> = {
-        let mut v = vec![];
+            SINGULAR_INFLECTIONS.read().unwrap().iter().rev().for_each(
+                |Regular { find, replace }| {
+                    compile_inflections(&mut v, find, replace);
+                },
+            );
 
-        UNCOUNTABLE_INFLECTIONS.read().unwrap().iter().for_each(|x| {
-            compile_uncountable(&mut v, x);
-        });
-
-        IRREGULAR_INFLECTIONS.read().unwrap().iter().for_each(|Irregular{singular, plural}| {
-            compile_irregular_inflections(&mut v, plural, singular);
-        });
-
-        SINGULAR_INFLECTIONS.read().unwrap().iter().for_each(|Regular{find, replace}| {
-            compile_inflections(&mut v, find, replace);
-        });
-
-        RwLock::new(v)
-    };
+            RwLock::new(v)
+        };
 }
 
 #[derive(Clone, Debug)]
@@ -168,7 +214,10 @@ pub struct Inflection {
 
 impl Inflection {
     fn new(rex: String, replace: String) -> Result<Inflection, Box<dyn std::error::Error>> {
-        Ok(Inflection { regex: Regex::new(&rex)?, replace })
+        Ok(Inflection {
+            regex: Regex::new(&rex)?,
+            replace,
+        })
     }
 }
 
@@ -188,7 +237,6 @@ fn compile_uncountable(p: &mut Vec<Inflection>, x: &str) {
     p.push(Inflection::new(format!("^(?i)({})$", x), "${1}".to_string()).unwrap());
 }
 
-
 fn re_compile() {
     re_plural_compile();
     re_singular_compile()
@@ -198,38 +246,67 @@ fn re_plural_compile() {
     let mut p = COMPILED_PLURAL_MAPS.write().unwrap();
     p.clear();
 
-    UNCOUNTABLE_INFLECTIONS.read().unwrap().iter().for_each(|x| {
-        compile_uncountable(&mut p, x);
-    });
+    UNCOUNTABLE_INFLECTIONS
+        .read()
+        .unwrap()
+        .iter()
+        .for_each(|x| {
+            compile_uncountable(&mut p, x);
+        });
 
-    IRREGULAR_INFLECTIONS.read().unwrap().iter().for_each(|Irregular { singular, plural }| {
-        compile_irregular_inflections(&mut p, singular, plural);
-    });
+    IRREGULAR_INFLECTIONS
+        .read()
+        .unwrap()
+        .iter()
+        .for_each(|Irregular { singular, plural }| {
+            compile_irregular_inflections(&mut p, singular, plural);
+        });
 
-    PLURAL_INFLECTIONS.read().unwrap().iter().for_each(|Regular { find, replace }| {
-        compile_inflections(&mut p, find, replace);
-    });
+    PLURAL_INFLECTIONS
+        .read()
+        .unwrap()
+        .iter()
+        .rev()
+        .for_each(|Regular { find, replace }| {
+            compile_inflections(&mut p, find, replace);
+        });
 }
 
 fn re_singular_compile() {
     let mut s = COMPILED_SINGULAR_MAPS.write().unwrap();
     s.clear();
 
-    UNCOUNTABLE_INFLECTIONS.read().unwrap().iter().for_each(|x| {
-        compile_uncountable(&mut s, x);
-    });
+    UNCOUNTABLE_INFLECTIONS
+        .read()
+        .unwrap()
+        .iter()
+        .for_each(|x| {
+            compile_uncountable(&mut s, x);
+        });
 
-    IRREGULAR_INFLECTIONS.read().unwrap().iter().for_each(|Irregular { singular, plural }| {
-        compile_irregular_inflections(&mut s, plural, singular);
-    });
+    IRREGULAR_INFLECTIONS
+        .read()
+        .unwrap()
+        .iter()
+        .for_each(|Irregular { singular, plural }| {
+            compile_irregular_inflections(&mut s, plural, singular);
+        });
 
-    SINGULAR_INFLECTIONS.read().unwrap().iter().for_each(|Regular { find, replace }| {
-        compile_inflections(&mut s, find, replace);
-    });
+    SINGULAR_INFLECTIONS
+        .read()
+        .unwrap()
+        .iter()
+        .rev()
+        .for_each(|Regular { find, replace }| {
+            compile_inflections(&mut s, find, replace);
+        });
 }
 
 pub fn add_plural<T: Into<String>>(find: T, replace: T) {
-    let r = Regular { find: find.into(), replace: replace.into() };
+    let r = Regular {
+        find: find.into(),
+        replace: replace.into(),
+    };
 
     if let Ok(mut s) = PLURAL_INFLECTIONS.write() {
         s.push(r);
@@ -239,7 +316,10 @@ pub fn add_plural<T: Into<String>>(find: T, replace: T) {
 }
 
 pub fn add_singular<T: Into<String>>(find: T, replace: T) {
-    let r = Regular { find: find.into(), replace: replace.into() };
+    let r = Regular {
+        find: find.into(),
+        replace: replace.into(),
+    };
 
     if let Ok(mut s) = SINGULAR_INFLECTIONS.write() {
         s.push(r);
@@ -249,7 +329,10 @@ pub fn add_singular<T: Into<String>>(find: T, replace: T) {
 }
 
 pub fn add_irregular<T: Into<String>>(singular: T, plural: T) {
-    let r = Irregular { singular: singular.into(), plural: plural.into() };
+    let r = Irregular {
+        singular: singular.into(),
+        plural: plural.into(),
+    };
 
     if let Ok(mut s) = IRREGULAR_INFLECTIONS.write() {
         s.push(r);
@@ -258,7 +341,7 @@ pub fn add_irregular<T: Into<String>>(singular: T, plural: T) {
     re_compile();
 }
 
-pub fn add_uncountable<T: Into<String>, I: Iterator<Item=T>>(values: I) {
+pub fn add_uncountable<T: Into<String>, I: Iterator<Item = T>>(values: I) {
     if let Ok(mut s) = UNCOUNTABLE_INFLECTIONS.write() {
         s.extend(values.into_iter().map(|x| x.into()));
     }
@@ -312,8 +395,9 @@ pub fn get_uncountable() -> Vec<String> {
 /// assert_eq!(plural::<_, String>("FancyPerson"), "FancyPeople".to_string());
 /// ```
 pub fn plural<T, F>(input: T) -> F
-    where T: Into<String>,
-          F: From<String>
+where
+    T: Into<String>,
+    F: From<String>,
 {
     let m = input.into();
     if let Ok(s) = COMPILED_PLURAL_MAPS.read() {
@@ -326,7 +410,6 @@ pub fn plural<T, F>(input: T) -> F
 
     From::from(m)
 }
-
 
 /// singular converts a word to its singular form
 /// # example
@@ -342,8 +425,9 @@ pub fn plural<T, F>(input: T) -> F
 /// assert_eq!(singular::<_, String>("FancyPeople"), "FancyPerson".to_string());
 /// ```
 pub fn singular<T, F>(input: T) -> F
-    where T: Into<String>,
-          F: From<String>
+where
+    T: Into<String>,
+    F: From<String>,
 {
     let m = input.into();
     if let Ok(s) = COMPILED_SINGULAR_MAPS.read() {
@@ -357,7 +441,7 @@ pub fn singular<T, F>(input: T) -> F
     From::from(m)
 }
 
-pub fn set_plural<I: Iterator<Item=Regular>>(data: I) {
+pub fn set_plural<I: Iterator<Item = Regular>>(data: I) {
     if let Ok(mut s) = PLURAL_INFLECTIONS.write() {
         s.clear();
         s.extend(data)
@@ -366,7 +450,7 @@ pub fn set_plural<I: Iterator<Item=Regular>>(data: I) {
     re_plural_compile()
 }
 
-pub fn set_singular<I: Iterator<Item=Regular>>(data: I) {
+pub fn set_singular<I: Iterator<Item = Regular>>(data: I) {
     if let Ok(mut s) = SINGULAR_INFLECTIONS.write() {
         s.clear();
         s.extend(data)
@@ -375,7 +459,7 @@ pub fn set_singular<I: Iterator<Item=Regular>>(data: I) {
     re_singular_compile()
 }
 
-pub fn set_irregular<I: Iterator<Item=Irregular>>(data: I) {
+pub fn set_irregular<I: Iterator<Item = Irregular>>(data: I) {
     if let Ok(mut s) = IRREGULAR_INFLECTIONS.write() {
         s.clear();
         s.extend(data)
@@ -384,7 +468,7 @@ pub fn set_irregular<I: Iterator<Item=Irregular>>(data: I) {
     re_compile()
 }
 
-pub fn set_uncountable<I: Iterator<Item=String>>(data: I) {
+pub fn set_uncountable<I: Iterator<Item = String>>(data: I) {
     if let Ok(mut s) = UNCOUNTABLE_INFLECTIONS.write() {
         s.clear();
         s.extend(data)
@@ -545,9 +629,18 @@ mod tests {
 
     #[test]
     fn test_get() {
-        assert_eq!(get_irregular().len(), IRREGULAR_INFLECTIONS.read().unwrap().len());
+        assert_eq!(
+            get_irregular().len(),
+            IRREGULAR_INFLECTIONS.read().unwrap().len()
+        );
         assert_eq!(get_plural().len(), PLURAL_INFLECTIONS.read().unwrap().len());
-        assert_eq!(get_uncountable().len(), UNCOUNTABLE_INFLECTIONS.read().unwrap().len());
-        assert_eq!(get_singular().len(), SINGULAR_INFLECTIONS.read().unwrap().len());
+        assert_eq!(
+            get_uncountable().len(),
+            UNCOUNTABLE_INFLECTIONS.read().unwrap().len()
+        );
+        assert_eq!(
+            get_singular().len(),
+            SINGULAR_INFLECTIONS.read().unwrap().len()
+        );
     }
 }

@@ -1,3 +1,5 @@
+//! Inflection pluralizes and singularizes English nouns
+
 extern crate lazy_static;
 extern crate regex;
 extern crate titlecase;
@@ -296,28 +298,63 @@ pub fn get_uncountable() -> Vec<String> {
     }
 }
 
-pub fn plural(input: String) -> String {
+/// plural converts a word to its plural form.
+/// # example
+/// ```
+/// use inflection::plural;
+///
+/// assert_eq!(plural::<_, String>("person"), "people".to_string());
+/// assert_eq!(plural::<_, String>("Person"), "People".to_string());
+/// assert_eq!(plural::<_, String>("PERSON"), "PEOPLE".to_string());
+/// assert_eq!(plural::<_, String>("bus"), "buses".to_string());
+/// assert_eq!(plural::<_, String>("BUS"), "BUSES".to_string());
+/// assert_eq!(plural::<_, String>("Bus"), "Buses".to_string());
+/// assert_eq!(plural::<_, String>("FancyPerson"), "FancyPeople".to_string());
+/// ```
+pub fn plural<T, F>(input: T) -> F
+    where T: Into<String>,
+          F: From<String>
+{
+    let m = input.into();
     if let Ok(s) = COMPILED_PLURAL_MAPS.read() {
         for x in s.iter() {
-            if x.regex.is_match(input.as_str()) {
-                return x.regex.replace(input.as_str(), x.replace.as_str()).to_string();
+            if x.regex.is_match(&m) {
+                return From::from(x.regex.replace(&m, x.replace.as_str()).to_string());
             }
         }
     }
 
-    input
+    From::from(m)
 }
 
-pub fn singular(input: String) -> String {
+
+/// singular converts a word to its singular form
+/// # example
+/// ```
+/// use inflection::singular;
+///
+/// assert_eq!(singular::<_, String>("people"), "person".to_string());
+/// assert_eq!(singular::<_, String>("PEOPLE"), "PERSON".to_string());
+/// assert_eq!(singular::<_, String>("buses"), "bus".to_string());
+/// assert_eq!(singular::<_, String>("People"), "Person".to_string());
+/// assert_eq!(singular::<_, String>("BUSES"), "BUS".to_string());
+/// assert_eq!(singular::<_, String>("Buses"), "Bus".to_string());
+/// assert_eq!(singular::<_, String>("FancyPeople"), "FancyPerson".to_string());
+/// ```
+pub fn singular<T, F>(input: T) -> F
+    where T: Into<String>,
+          F: From<String>
+{
+    let m = input.into();
     if let Ok(s) = COMPILED_SINGULAR_MAPS.read() {
         for x in s.iter() {
-            if x.regex.is_match(input.as_str()) {
-                return x.regex.replace(input.as_str(), x.replace.as_str()).to_string();
+            if x.regex.is_match(&m) {
+                return From::from(x.regex.replace(&m, x.replace.as_str()).to_string());
             }
         }
     }
 
-    input
+    From::from(m)
 }
 
 pub fn set_plural<I: Iterator<Item=Regular>>(data: I) {
@@ -463,18 +500,18 @@ mod tests {
     #[test]
     fn it_plural() {
         for (i, v) in INFLECTIONS.iter() {
-            assert_eq!(plural(i.to_uppercase()), v.to_uppercase());
-            assert_eq!(plural(titlecase(i)), titlecase(v));
-            assert_eq!(plural(i.to_string()), v.to_string());
+            assert_eq!(plural::<_, String>(i.to_uppercase()), v.to_uppercase());
+            assert_eq!(plural::<_, String>(titlecase(i)), titlecase(v));
+            assert_eq!(plural::<_, String>(i.to_string()), v.to_string());
         }
     }
 
     #[test]
     fn it_singular() {
         for (i, v) in INFLECTIONS.iter() {
-            assert_eq!(i.to_uppercase(), singular(v.to_uppercase()));
-            assert_eq!(titlecase(i), singular(titlecase(v)));
-            assert_eq!(i.to_string(), singular(v.to_string()));
+            assert_eq!(i.to_uppercase(), singular::<_, String>(v.to_uppercase()));
+            assert_eq!(titlecase(i), singular::<_, String>(titlecase(v)));
+            assert_eq!(i.to_string(), singular::<_, String>(v.to_string()));
         }
     }
 

@@ -10,3 +10,6 @@ documentation = "https://docs.rs/inflection"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+titlecase = "1.0"
+lazy_static = "1.4.0"
+regex = "1.5.4"
